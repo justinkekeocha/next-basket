@@ -1,0 +1,94 @@
+version: "3"
+services:
+
+    mysql:
+        container_name: ${APP_NAME}_mysql
+        image: 'mysql/mysql-server:8.0'
+        ports:
+            - '${DB_PORT:-3306}:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_HOST: '%'
+            MYSQL_DATABASE: '${DB_DATABASE}'
+            MYSQL_USER: '${DB_USERNAME}'
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 0
+        volumes:
+            #APP_NAME is used to avoid conflicts with other projects
+            - "~/.docker-volumes/${APP_NAME}/mysql:/var/lib/mysql"
+            - './docker/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+            - './docker/mysql/mysqld.cnf:/etc/mysql/mysql.conf.d/mysqld.cnf'
+        networks:
+            - backend
+        healthcheck:
+            test: [ "CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}" ]
+            retries: 3
+            timeout: 5s
+
+    php:
+        container_name: ${APP_NAME}_php
+        build:
+            context: ./docker/php
+        volumes:
+            - './:/var/www/html'
+            # Do not add any configuration file here, it will crash app
+        networks:
+            - backend
+        depends_on:
+            - mysql
+
+    nginx:
+        container_name: ${APP_NAME}_nginx
+        image: 'nginx:alpine'
+        ports:
+            - '${APP_PORT:-80}:80'
+        volumes:
+            - './:/var/www/html'
+            - './docker/nginx/:/etc/nginx/conf.d/'
+        networks:
+            - backend
+        depends_on:
+            - php
+
+    phpmyadmin:
+        container_name: ${APP_NAME}_phpmyadmin
+        build: ./docker/phpmyadmin
+        ports:
+            - '${PMA_PORT:-3400}:80'
+        environment:
+            #https://docs.phpmyadmin.net/en/release_5_1_4/setup.html#docker-environment-variables
+            #https://docs.phpmyadmin.net/en/release_5_1_4/setup.html#customizing-configuration-file-using-docker-compose
+            PMA_ARBITRARY: 0 #Don't ask for server name
+            PMA_HOST: '${DB_CONNECTION}'
+            MYSQL_USER: '${DB_USERNAME}' #Don't use 'root' as user here, it will cause errors
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MAX_EXECUTION_TIME: 600
+            MEMORY_LIMIT: '256M'
+            UPLOAD_LIMIT: '2G'
+        volumes:
+            - './docker/phpmyadmin/config.user.inc.php:/etc/phpmyadmin/config.user.inc.php'
+        depends_on:
+            - mysql
+        networks:
+            - backend
+
+    cron:
+        container_name: ${APP_NAME}_cron
+        build:
+            context: ./docker/cron
+        restart: unless-stopped
+        volumes:
+            - './:/var/www/html'
+            # Adding crontabs volume here will crash cron. I don't know why yet
+        networks:
+            - backend
+        depends_on:
+            - mysql
+
+networks:
+    backend:
+        driver: bridge
+volumes:
+    mysql:
+        driver: local
