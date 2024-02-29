@@ -11,7 +11,7 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 #Mine
 
 # Install PHP extensions.
-RUN docker-php-ext-install mysqli pdo pdo_mysql bcmath curl opcache mbstring
+RUN docker-php-ext-install mysqli pdo pdo_mysql bcmath curl opcache mbstring pcntl sockets
 
 
 ###########################################################################
