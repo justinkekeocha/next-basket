@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 
+use App\Jobs\UserCreated;
+
 class UserController extends Controller
 {
     /**
@@ -28,7 +30,11 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $data = User::create($request->all());
+        
+        UserCreated::dispatch($data);
+
+        return $this->response(message: 'User created successfully', data: $data);
     }
 
     /**
